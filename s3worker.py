@@ -1,22 +1,16 @@
 #!/usr/bin/env python2.6
 
-import re
-import sys
 import hashlib
-import time
+import re
 import simplejson
-import ConfigParser
+import sys
+import time
 from string import Template
 
 from boto.sqs.connection import SQSConnection
 from boto.sqs.message import MHMessage
+from s3workerlib import log_msg, log_err, log_label, process_config
 
-from s3workerlib import log_msg, log_err, log_label
-
-config_file = "s3worker.conf"
-
-job_match = {}
-tmp_dir = "/tmp/"
 
 def process_job(job):
     log_msg("Picked up job: %s" % job['ID'])
@@ -52,7 +46,7 @@ def wait_for_job():
     except Exception, e:
         logging.error("Caught exception: %s" % e)
 
-    for job_check_count in xrange(1, job_count):
+    for job_check_count in xrange(1, min(10, job_count)):
         job_queue = queue.get_messages(num_messages=job_check_count)
         for job in job_queue:
             if job['STATUS'] == "READY":
@@ -68,43 +62,8 @@ def main_loop():
 
 
 if __name__ == "__main__":
-    config = ConfigParser.ConfigParser()
-    config.read(config_file)
-
     log_label("starting ..." )
-
-    try:
-        tmp_dir = config.get("global", "tmp_dir")
-    except:
-        pass
-    log_msg( "Temp dir: %s" % tmp_dir)
-
-    try:
-        # AWS auth details
-        aws_access_key = config.get("AWSauth", "aws_access_key")
-        aws_secret_key = config.get("AWSauth", "aws_secret_key")
-
-        # S3 configuration details
-        s3_bucket = config.get("S3config", "s3_bucket")
-
-        # SQS job queue configuration details
-        queue_name = config.get("SQSconfig", "queue_name")
-        conn = SQSConnection(aws_access_key, aws_secret_key)
-        queue = conn.create_queue(queue_name)
-        queue.set_message_class(MHMessage)
-
-        sleep_time = float(config.get("SQSconfig", "sleep_time"))
-        log_msg("sleep time: %s" % sleep_time)
-
-        for section in config.sections():
-            if re.search("job", section):
-                log_msg("processing section [%s]" % section)
-                job_match[config.get(section, "match")] = config.get(section, "exec")
-
-    except Exception, e:
-        log_err("Error reading config file [%s]: %s" % (config_file, e))    
-        sys.exit(1)
-
+    ( tmp_dir, s3_bucket, queue, sleep_time, job_match ) = process_config()
     log_label("start-up complete" )
 
     # Start job loop
