@@ -11,3 +11,6 @@ def log_label(msg):
 
 def log_msg(msg):
     logging.info("s3worker:%s: %s" % (time.strftime("%c"), msg))
+
+def log_err(msg):
+    logging.error("s3worker:%s: %s" % (time.strftime("%c"), msg))

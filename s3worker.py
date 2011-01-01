@@ -6,11 +6,12 @@ import hashlib
 import time
 import simplejson
 import ConfigParser
+from string import Template
 
 from boto.sqs.connection import SQSConnection
 from boto.sqs.message import MHMessage
 
-from s3workerlib import log_msg, log_label
+from s3workerlib import log_msg, log_err, log_label
 
 config_file = "s3worker.conf"
 
@@ -23,6 +24,8 @@ def process_job(job):
 
     if job['STATUS'] == 'READY':
         asset_name = job["ASSET_URL"].split('/')[-1]
+        filename = "%s/%s" % (tmp_dir, asset_name)
+        basename = "%s/%s" % (tmp_dir, asset_name.split('.')[0])
         log_msg("Picking up asset: %s" % asset_name)
 
         suffix = "%s" % asset_name.split('.')[-1] 
@@ -33,8 +36,9 @@ def process_job(job):
         matched_job = [ job for job in job_matches if re.search(suffix_check, job) ]
         log_msg("Matched %s" % matched_job)
 
-        cmd = job_match[matched_job[0]]
-        log_msg("CMD: %s %s" % (cmd, asset_name))
+        cmd_pattern = Template(job_match[matched_job[0]])
+        cmd = cmd_pattern.substitute(filename=filename, basename=basename) 
+        log_msg(cmd)
 
         #job.delete()
 
@@ -98,7 +102,7 @@ if __name__ == "__main__":
                 job_match[config.get(section, "match")] = config.get(section, "exec")
 
     except Exception, e:
-        logging.error("Error reading config file [%s]: %s" % (config_file, e))    
+        log_err("Error reading config file [%s]: %s" % (config_file, e))    
         sys.exit(1)
 
     log_label("start-up complete" )
