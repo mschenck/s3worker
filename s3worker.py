@@ -1,9 +1,8 @@
 #!/usr/bin/env python2.6
 
+import re
 import sys
 import hashlib
-import logging
-import logging.handlers
 import time
 import simplejson
 import ConfigParser
@@ -11,12 +10,33 @@ import ConfigParser
 from boto.sqs.connection import SQSConnection
 from boto.sqs.message import MHMessage
 
+from s3workerlib import log_msg, log_label
+
 config_file = "s3worker.conf"
 
+job_match = {}
+tmp_dir = "/tmp/"
+
 def process_job(job):
-    logging.info("Picked up job: %s" % job['ID'])
-    logging.info("  Job details: %s" % job.get_body())
-    #job.delete()
+    log_msg("Picked up job: %s" % job['ID'])
+    log_msg("  Job details: %s" % job.get_body())
+
+    if job['STATUS'] == 'READY':
+        asset_name = job["ASSET_URL"].split('/')[-1]
+        log_msg("Picking up asset: %s" % asset_name)
+
+        suffix = "%s" % asset_name.split('.')[-1] 
+        log_msg("Suffix: %s" % suffix)
+
+        job_matches = job_match.keys() 
+        suffix_check = re.compile( suffix, re.IGNORECASE)
+        matched_job = [ job for job in job_matches if re.search(suffix_check, job) ]
+        log_msg("Matched %s" % matched_job)
+
+        cmd = job_match[matched_job[0]]
+        log_msg("CMD: %s %s" % (cmd, asset_name))
+
+        #job.delete()
 
 
 def wait_for_job():
@@ -24,7 +44,7 @@ def wait_for_job():
 
     try:
         job_count = queue.count()
-        logging.info("Current Job Queue length is %s" % job_count)
+        log_msg("Current Job Queue length is %s" % job_count)
     except Exception, e:
         logging.error("Caught exception: %s" % e)
 
@@ -33,8 +53,6 @@ def wait_for_job():
         for job in job_queue:
             if job['STATUS'] == "READY":
                 process_job(job)
-        time.sleep(sleep_time)
-
     else:
         time.sleep(sleep_time)
     return True
@@ -49,7 +67,13 @@ if __name__ == "__main__":
     config = ConfigParser.ConfigParser()
     config.read(config_file)
 
-    logging.getLogger().setLevel(logging.INFO)
+    log_label("starting ..." )
+
+    try:
+        tmp_dir = config.get("global", "tmp_dir")
+    except:
+        pass
+    log_msg( "Temp dir: %s" % tmp_dir)
 
     try:
         # AWS auth details
@@ -66,10 +90,18 @@ if __name__ == "__main__":
         queue.set_message_class(MHMessage)
 
         sleep_time = float(config.get("SQSconfig", "sleep_time"))
+        log_msg("sleep time: %s" % sleep_time)
+
+        for section in config.sections():
+            if re.search("job", section):
+                log_msg("processing section [%s]" % section)
+                job_match[config.get(section, "match")] = config.get(section, "exec")
 
     except Exception, e:
         logging.error("Error reading config file [%s]: %s" % (config_file, e))    
         sys.exit(1)
+
+    log_label("start-up complete" )
 
     # Start job loop
     main_loop()
