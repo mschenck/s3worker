@@ -1,0 +1,13 @@
+################################################################################
+#Setup
+################################################################################
+s3worker.conf:
+    Correct AWS API authentication details
+        aws_access_key = "<Insert AWS Access Key>"
+        aws_secret_key = "<Insert AWS Secret Key>"
+
+    Correct S3 bucket name
+        s3_bucket = up-test-bk
+
+    Correct SQS queue name
+        queue_name = s3proxy_upload
