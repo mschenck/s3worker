@@ -8,6 +8,12 @@
 # Temporary storage - Used for downloading/processing assets
 tmp_dir = /tmp
 
+# Logging file
+log_file = /tmp/s3worker.log
+
+# Logging level: acceptable options (debug, info, warning, error, critical)
+log_level = debug
+
 ################################################################################
 # AWS API auth creditials
 ################################################################################
@@ -38,15 +44,22 @@ sleep_time = 10
 ################################################################################
 # Job configuration
 #
-# Note all sections must start with "job"
-# 
-# I.e. /tmp/image.png
+# Notes:
+#    - All sections must start with "job"
+#    - All execs(commands) must start with "exec"
+#    - Jobs/Execs are read in alphetical/numeric order
+# Variables (use in exec):
+# ex. /tmp/image.png
 #    $filename = /tmp/image.png
 #    $basename = /tmp/image
 ################################################################################
 [job_png]
 match = png
-exec = echo $filename
+exec_0 = echo $filename
+exec_11 = echo $filename-11
+exec_1 = cp $filename $basename-foo.png
+exec_3 = echo $filename-3
+exec_2 = echo $filename-2
 
 [job_html]
 match = html
