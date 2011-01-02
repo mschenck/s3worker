@@ -13,31 +13,50 @@ tmp_dir = "/tmp"
 log_file = "/tmp/s3worker.log"
 job_match = {}
 
+################################################################################
+# Logging details
+################################################################################
 s3logger = logging.getLogger('s3worker')
+LEVELS = {'debug': logging.DEBUG,
+          'info': logging.INFO,
+          'warning': logging.WARNING,
+          'error': logging.ERROR,
+          'critical': logging.CRITICAL}
+
 
 def log_label(msg):
     s3logger.info("#" * 80)
     s3logger.info("# %s" % msg)
     s3logger.info("#" * 80)
 
+
 def log_msg(msg):
     s3logger.info("s3worker:%s: %s" % (time.strftime("%c"), msg))
+
 
 def log_err(msg):
     s3logger.error("s3worker:%s: %s" % (time.strftime("%c"), msg))
 
+
+def log_debug(msg):
+    s3logger.debug("s3worker:%s: %s" % (time.strftime("%c"), msg))
+
+
+################################################################################
+# Configuration processing details
+################################################################################
 def process_config():
     config = ConfigParser.ConfigParser()
     config.read(config_file)
 
-
     try:
         tmp_dir = config.get("global", "tmp_dir")
         log_file = config.get("global", "log_file")
+        log_level = config.get("global", "log_level")
     except:
         pass
 
-    s3logger.setLevel(logging.INFO)
+    s3logger.setLevel(LEVELS.get(log_level, logging.INFO))
     file_handler = logging.handlers.WatchedFileHandler(log_file)
     s3logger.addHandler(file_handler)
 
@@ -63,8 +82,17 @@ def process_config():
 
         for section in config.sections():
             if re.search("job", section):
+                suffix = config.get(section, "match")
                 log_msg("processing section [%s]" % section)
-                job_match[config.get(section, "match")] = config.get(section, "exec")
+               
+                job_match[suffix] = []
+                for option in config.options(section):
+                    if re.search("exec", option):
+                        job_match[suffix].append( config.get(section, option) )
+                       
+                log_debug("CMDs for suffix [png]") 
+                for cmd in job_match[suffix]:
+                    log_debug("   %s" % cmd)
 
     except Exception, e:
         log_err("Error reading config file [%s]: %s" % (config_file, e))
