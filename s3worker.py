@@ -16,59 +16,56 @@ from s3workerlib import log_msg, log_err, log_debug, log_label, process_config
 
 def process_job(job):
     log_msg("Picked up job: %s" % job['ID'])
-    log_msg("  Job details: %s" % job.get_body())
+    log_debug("details:%s" % job.get_body())
 
-    if job['STATUS'] == 'READY':
-        try:
-            # Pull down the asset and assign template variables
-            asset_name = job["ASSET_URL"].split('/')[-1]
+    try:
+        # Pull down the asset and assign template variables
+        asset_name = job["ASSET_URL"].split('/')[-1]
 
-            filename = "%s/%s" % (tmp_dir, asset_name)
-            basename = "%s/%s" % (tmp_dir, asset_name.split('.')[0])
+        filename = "%s/%s" % (tmp_dir, asset_name)
+        basename = "%s/%s" % (tmp_dir, asset_name.split('.')[0])
 
-            # "wget" asset_url to $filename
-            asset = open(filename, "wb")
-            asset.write( wget.open(job["ASSET_URL"]).read() )
-            asset.close()
+        # "wget" asset_url to $filename
+        asset = open(filename, "wb")
+        asset.write( wget.open(job["ASSET_URL"]).read() )
+        asset.close()
     
-            # Take ownership for job
-            job.update( { "STATUS": "PROCESSING" } )
-            queue.write(job)
-            log_msg("Picked up asset: %s" % asset_name)
-        except Exception, e:
-            log_err("Caught exception taking job: %s" % e)
-   
-        try: 
-            # Attempt to match suffix with job sections
-            asset_suffix = "%s" % asset_name.split('.')[-1] 
-            log_debug("Suffix: %s" % asset_suffix)
-            suffixes = job_processes.keys() 
-            suffix_check = re.compile( asset_suffix, re.IGNORECASE)
-            matched_suffix = [ suffix for suffix in suffixes if re.search(suffix_check, suffix) ]
-            if matched_suffix:
-                log_debug("Matched suffix '%s'" % matched_suffix)
-            else:
-                log_err("Could not match any job configs to files with suffix '%s'" % suffix)
-        except Exception, e:
-            log_err("Caught exception matching execs to suffix" % e)
-   
-        try: 
-            # Perform commands on asset
-            exec_list = job_processes[matched_suffix[0]]
-            for command_template in exec_list:
-                log_debug("Command template [ %s ]" % command_template)
+        # Take ownership for job
+        job.update( { "STATUS": "PROCESSING" } )
+        log_msg("Picked up asset: %s" % asset_name)
+    except Exception, e:
+        log_err("Caught exception taking job: %s" % e)
+ 
+    try: 
+        # Attempt to match suffix with job sections
+        asset_suffix = "%s" % asset_name.split('.')[-1] 
+        log_debug("Suffix: %s" % asset_suffix)
+        suffixes = job_processes.keys() 
+        suffix_check = re.compile( asset_suffix, re.IGNORECASE)
+        matched_suffix = [ suffix for suffix in suffixes if re.search(suffix_check, suffix) ]
+        if matched_suffix:
+            log_debug("Matched suffix '%s'" % matched_suffix)
+        else:
+            log_err("Could not match any job configs to files with suffix '%s'" % suffix)
+    except Exception, e:
+        log_err("Caught exception matching execs to suffix" % e)
+ 
+    try: 
+        # Perform commands on asset
+        exec_list = job_processes[matched_suffix[0]]
+        for command_template in exec_list:
+            log_debug("Command template [ %s ]" % command_template)
 
-                cmd_pattern = Template(command_template)
-                cmd = cmd_pattern.substitute(filename=filename, basename=basename) 
+            cmd_pattern = Template(command_template)
+            cmd = cmd_pattern.substitute(filename=filename, basename=basename) 
 
-                log_msg("Running command [%s]" % cmd)
-                os.system(cmd)
-    
-            # If successful, delete job
-            job.delete()
-            queue.write(job)
-        except Exception, e:
-            log_err("Caught exception processing job: %s" % e)
+            log_msg("Running command [%s]" % cmd)
+            os.system(cmd)
+ 
+        # If successful, delete job
+        queue.delete_message(job)
+    except Exception, e:
+        log_err("Caught exception processing job: %s" % e)
 
 
 def wait_for_job():
@@ -80,19 +77,17 @@ def wait_for_job():
     except Exception, e:
         logging.error("Caught exception: %s" % e)
 
-    for job_check_count in xrange(1, min(10, job_count)):
-        job_queue = queue.get_messages(num_messages=job_check_count)
-        for job in job_queue:
-            if job['STATUS'] == "READY":
-                process_job(job)
-    else:
-        time.sleep(sleep_time)
+    if job_count > 0:
+        job = queue.get_messages()[0]
+        if job['STATUS'] == "READY":
+            process_job(job)
+
     return True
 
 
 def main_loop():
     while wait_for_job():
-        pass
+        time.sleep(sleep_time)
 
 
 if __name__ == "__main__":
