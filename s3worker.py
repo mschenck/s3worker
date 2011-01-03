@@ -17,6 +17,7 @@ from s3workerlib import log_msg, log_err, log_debug, log_label, process_config
 def process_job(job):
     log_msg("Picked up job: %s" % job['ID'])
     log_debug("details:%s" % job.get_body())
+    template_mappings = {}
 
     try:
         # Pull down the asset and assign template variables
@@ -24,6 +25,8 @@ def process_job(job):
 
         filename = "%s/%s" % (tmp_dir, asset_name)
         basename = "%s/%s" % (tmp_dir, asset_name.split('.')[0])
+        template_mappings["filename"] = filename
+        template_mappings["basename"] = basename
 
         # "wget" asset_url to $filename
         asset = open(filename, "wb")
@@ -57,7 +60,7 @@ def process_job(job):
             log_debug("Command template [ %s ]" % command_template)
 
             cmd_pattern = Template(command_template)
-            cmd = cmd_pattern.substitute(filename=filename, basename=basename) 
+            cmd = cmd_pattern.substitute(template_mappings) 
 
             log_msg("Running command [%s]" % cmd)
             os.system(cmd)
@@ -83,7 +86,7 @@ def wait_for_job():
             if job['STATUS'] == "READY":
                 process_job(job)
         except Exception, e:
-            log_error("Exception attempting to read from queue with job count %s: %s" % (job_count, e))
+            log_err("Exception attempting to read from queue with job count %s: %s" % (job_count, e))
 
     return True
 
