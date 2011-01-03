@@ -75,12 +75,15 @@ def wait_for_job():
         job_count = queue.count()
         log_msg("Current Job Queue length is %s" % job_count)
     except Exception, e:
-        logging.error("Caught exception: %s" % e)
+        logging.err("Caught exception: %s" % e)
 
     if job_count > 0:
-        job = queue.get_messages()[0]
-        if job['STATUS'] == "READY":
-            process_job(job)
+        try:
+            job = queue.get_messages()[0]
+            if job['STATUS'] == "READY":
+                process_job(job)
+        except Exception, e:
+            log_error("Exception attempting to read from queue with job count %s: %s" % (job_count, e))
 
     return True
 
